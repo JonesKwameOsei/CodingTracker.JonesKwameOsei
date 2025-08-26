@@ -1,0 +1,8 @@
+{
+	"profiles": {
+		"YourProjectName": {
+			"commandName": "Project",
+			"workingDirectory": "Your Working Directory"
+		}
+	}
+}
