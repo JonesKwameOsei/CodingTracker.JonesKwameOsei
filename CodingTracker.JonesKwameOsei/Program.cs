@@ -8,9 +8,14 @@ IConfiguration configuration = new ConfigurationBuilder()
 
 string? connectionString = configuration.GetSection("ConnectionStrings")["DefaultConnection"];
 
+Console.WriteLine(connectionString);
+
 var dataAcess = new DataAccess(connectionString ?? string.Empty);
 
+
 dataAcess.CreateDatabase();
+
+UserInterface.MainMenu();
 
 Console.WriteLine("Press any key to exit...");
 Console.ReadKey();
