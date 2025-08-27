@@ -11,12 +11,12 @@ internal class Enums
 
         [Display(Name = "View Coding Sessions")]
         ViewCodingSessions,
-        
+
         [Display(Name = "Update Coding Session")]
-        UpdateCodingSessions,
-        
+        UpdateCodingSession,
+
         [Display(Name = "Delete Coding Sessions")]
-        DeleteCodingSessions,
+        DeleteCodingSession,
 
         Quit
     }

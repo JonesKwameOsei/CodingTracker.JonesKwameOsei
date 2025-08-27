@@ -18,8 +18,8 @@ internal class UserInterface
                     .AddChoices(
                         MainMenuOptions.AddCodingSession,
                         MainMenuOptions.ViewCodingSessions,
-                        MainMenuOptions.UpdateCodingSessions,
-                        MainMenuOptions.DeleteCodingSessions,
+                        MainMenuOptions.UpdateCodingSession,
+                        MainMenuOptions.DeleteCodingSession,
                         MainMenuOptions.Quit
                     )
                 );
@@ -30,12 +30,14 @@ internal class UserInterface
                     AddCodingSession();
                     break;
                 case MainMenuOptions.ViewCodingSessions:
-                    ViewCodingSessions();
+                    var dataAccess = new DataAccess();
+                    var codingRecords = dataAccess.GetAllSessions();
+                    ViewCodingSessions(codingRecords);
                     break;
-                case MainMenuOptions.UpdateCodingSessions:
+                case MainMenuOptions.UpdateCodingSession:
                     UpdateCodingSession();
                     break;
-                case MainMenuOptions.DeleteCodingSessions:
+                case MainMenuOptions.DeleteCodingSession:
                     DeleteCodingSession();
                     break;
                 case MainMenuOptions.Quit:
@@ -48,12 +50,38 @@ internal class UserInterface
 
     private static void AddCodingSession()
     {
+        CodingRecord codingRecord = new CodingRecord();
+
+        var dateInputs = GetDateInputs();
+        codingRecord.Language = GetLanguageInput();
+        codingRecord.DateStart = dateInputs[0];
+        codingRecord.DateEnd = dateInputs[1];
+
+        var dataAccess = new DataAccess();
+        dataAccess.InsertRecord(codingRecord);
 
     }
 
-    private static void ViewCodingSessions()
+    private static void ViewCodingSessions(IEnumerable<CodingRecord> codingRecords)
     {
+        var table = new Table();
+        table.AddColumn("Id");
+        table.AddColumn("Language");
+        table.AddColumn("Date Start");
+        table.AddColumn("Date End");
+        table.AddColumn("Duration (Hours)");
 
+        foreach (var codingRecord in codingRecords)
+        {
+            table.AddRow(
+                codingRecord.Id.ToString(),
+                codingRecord.Language!,
+                codingRecord.DateStart.ToString(),
+                codingRecord.DateEnd.ToString(),
+                $"{codingRecord.Duration.TotalHours} hours {codingRecord.Duration.TotalMinutes % 60} minutes"
+            );
+        }
+        AnsiConsole.Write(table);
     }
 
     private static void UpdateCodingSession()
@@ -68,24 +96,24 @@ internal class UserInterface
 
     private static DateTime[] GetDateInputs()
     {
-        var startDateInput = AnsiConsole.Ask<string>("Input Start Date with the format: dd-MM-yy HH:mm (24 hour clock). Or enter 0 to return to main menu");
+        var startDateInput = AnsiConsole.Ask<string>("Input Start Date with the format: [yellow]dd-MM-yy HH:mm (24 hour clock)[/]. Or enter [red]0[/] to return to main menu: ");
 
         if (startDateInput == "0") MainMenu();
 
         DateTime startDate;
         while (!DateTime.TryParseExact(startDateInput, "dd-MM-yy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out startDate))
         {
-            startDateInput = AnsiConsole.Ask<string>("\n\nInvalid date format. Please input Start Date with the format: dd-MM-yy HH:mm (24 hour clock). Please try again\n\n");
+            startDateInput = AnsiConsole.Ask<string>("\n\nInvalid date format. Please input Start Date with the format: [yellow]dd-MM-yy HH:mm (24 hour clock)[/]. Please try again: \n\n");
         }
 
-        var endDateInput = AnsiConsole.Ask<string>("Input End Date with the format: dd-MM-yy HH:mm (24 hour clock). Or enter 0 to return to main menu");
+        var endDateInput = AnsiConsole.Ask<string>("Input End Date with the format: [yellow]dd-MM-yy HH:mm (24 hour clock)[/]. Or enter [red]0[/] to return to main menu: ");
 
         if (endDateInput == "0") MainMenu();
 
         DateTime endDate;
         while (!DateTime.TryParseExact(endDateInput, "dd-MM-yy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out endDate))
         {
-            endDateInput = AnsiConsole.Ask<string>("\n\nInvalid date format or End Date is earlier than or equal to Start Date. Please input End Date with the format: dd-MM-yy HH:mm (24 hour clock). Please try again\n\n");
+            endDateInput = AnsiConsole.Ask<string>("\n\nInvalid date format or End Date is earlier than or equal to Start Date. Please input End Date with the format: [yellow]dd-MM-yy HH:mm (24 hour clock)[/]. Please try again: \n\n");
         }
 
         while (startDate > endDate)
@@ -94,11 +122,22 @@ internal class UserInterface
 
             while (!DateTime.TryParseExact(endDateInput, "dd-MM-yy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out endDate))
             {
-                endDateInput = AnsiConsole.Ask<string>("\n\nInvalid date format. Please input End Date with the format: dd-MM-yy HH:mm (24 hour clock). Please try again\n\n");
+                endDateInput = AnsiConsole.Ask<string>("\n\nInvalid date format. Please input End Date with the format: [yellow]dd-MM-yy HH:mm (24 hour clock)[/]. Please try again: \n\n");
             }
         }
 
         return [startDate, endDate];
+    }
+
+    private static string GetLanguageInput()
+    {
+        var languageInput = AnsiConsole.Ask<string>("What programming language will you code? Or enter [red]0[/] to return to main menu: ");
+        if (languageInput == "0") MainMenu();
+        while (string.IsNullOrWhiteSpace(languageInput))
+        {
+            languageInput = AnsiConsole.Ask<string>("\n\n[red]Language cannot be empty. Please enter a valid programming language. Please try again: \n\n[/]");
+        }
+        return languageInput;
     }
 
 }
