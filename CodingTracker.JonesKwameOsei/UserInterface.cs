@@ -86,7 +86,44 @@ internal class UserInterface
 
     private static void UpdateCodingSession()
     {
+        var dataAccess = new DataAccess();
+        var codingRecords = dataAccess.GetAllSessions();
+        ViewCodingSessions(codingRecords);
 
+        var idInput = GetNumber("Enter the Id of the coding session you want to update. Or enter [red]0[/] to return to main menu: ");
+        if (idInput == 0) MainMenu();
+
+        var codingRecord = codingRecords.Where(crs => crs.Id == idInput).Single();
+        var dateInputs = GetDateInputs();
+
+        codingRecord.Language = GetLanguageInput();
+        codingRecord.DateStart = dateInputs[0];
+        codingRecord.DateEnd = dateInputs[1];
+
+        dataAccess.UpdateRecord(codingRecord);
+    }
+
+    private static int GetNumber(string prompt)
+    {
+        var input = AnsiConsole.Ask<string>(prompt).Trim();
+
+        if (input == "0")
+        {
+            MainMenu();
+            return 0;
+        }
+
+        while (!int.TryParse(input, out var value) || value < 0)
+        {
+            input = AnsiConsole.Ask<string>($"\n\nInvalid number: {prompt}").Trim();
+            if (input == "0")
+            {
+                MainMenu();
+                return 0;
+            }
+        }
+
+        return int.Parse(input);
     }
 
     private static void DeleteCodingSession()

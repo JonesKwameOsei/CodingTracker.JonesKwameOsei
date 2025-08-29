@@ -19,25 +19,26 @@ internal class DataAccess
 
     internal void CreateDatabase()
     {
-        using (var connection = new SqliteConnection(ConnectionString))
-        {
-            connection.Open();
+        using var connection = new SqliteConnection(ConnectionString);
 
-            string createTableQuery = @"
+        connection.Open();
+
+        const string createTableQuery = @"
              CREATE TABLE IF NOT EXISTS codingSessions (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Language TEXT NOT NULL,
-                    DateStart TEXT NOT NULL,
-                    DateEnd TEXT NOT NULL
+                    Language   TEXT NOT NULL,
+                    DateStart  TEXT NOT NULL,
+                    DateEnd    TEXT NOT NULL
              )";
 
-            connection.Execute(createTableQuery);
-        }
+        connection.Execute(createTableQuery);
     }
 
     internal void InsertRecord(CodingRecord codingRecord)
     {
         if (codingRecord is null) throw new ArgumentNullException(nameof(codingRecord));
+        if (string.IsNullOrWhiteSpace(codingRecord.Language))
+            throw new ArgumentException("Language cannot be null or empty.", nameof(codingRecord.Language));
 
         using var connection = new SqliteConnection(ConnectionString);
         connection.Open();
@@ -54,22 +55,73 @@ internal class DataAccess
         });
     }
 
+    internal void InsertMultipleRecords(IEnumerable<CodingRecord> codingRecords)
+    {
+        if (codingRecords is null) throw new ArgumentNullException(nameof(codingRecords));
+
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        string insertQueries = @"
+                INSERT INTO codingSessions (Language, DateStart, DateEnd)
+                VALUES (@Language, @DateStart, @DateEnd)";
+
+        var sanitised = codingRecords.Select(r =>
+        {
+            if (string.IsNullOrWhiteSpace(r.Language))
+                r.Language = "C#";
+            return new
+            {
+                r.Language,
+                r.DateStart,
+                r.DateEnd
+            };
+        });
+
+        connection.Execute(insertQueries, sanitised);
+    }
+
     internal IEnumerable<CodingRecord> GetAllSessions()
     {
-        using (var connection = new SqliteConnection(ConnectionString))
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        const string selectQuery = "SELECT Id, Language, DateStart, DateEnd FROM codingSessions ORDER BY DateStart";
+
+        var codingRecords = connection.Query<CodingRecord>(selectQuery).ToList();
+
+        foreach (var cr in codingRecords)
         {
-            connection.Open();
-
-            string selectQuery = "SELECT * FROM codingSessions";
-
-            var codingRecords = connection.Query<CodingRecord>(selectQuery);
-
-            foreach (var codingRecord in codingRecords)
-            {
-                codingRecord.Duration = codingRecord.DateEnd - codingRecord.DateStart;
-            }
-
-            return codingRecords;
+            cr.Duration = cr.DateEnd - cr.DateStart;
         }
+
+        return codingRecords;
+    }
+
+    internal void ResetSessions()
+    {
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+        connection.Execute("DELETE FROM codingSessions");
+        connection.Execute("DELETE FROM sqlite_sequence WHERE name = 'codingSessions';");
+    }
+
+    internal void UpdateRecord(CodingRecord updateRecord)
+    {
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        const string updateQuery = @"
+            UPDATE codingSessions
+            SET Language = @Language, DateStart = @DateStart, DateEnd = @DateEnd
+            WHERE Id = @Id";
+
+        connection.Execute(updateQuery, new
+        {
+            updateRecord.Language,
+            updateRecord.DateStart,
+            updateRecord.DateEnd,
+            updateRecord.Id
+        });
     }
 }
