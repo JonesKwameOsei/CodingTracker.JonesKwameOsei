@@ -124,4 +124,14 @@ internal class DataAccess
             updateRecord.Id
         });
     }
+
+    internal int DeleteRecord(int id)
+    {
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+        const string deleteQuery = "DELETE FROM codingSessions WHERE Id = @Id";
+        int rowsAffected = connection.Execute(deleteQuery, new { Id = id });
+
+        return rowsAffected;
+    }
 }
