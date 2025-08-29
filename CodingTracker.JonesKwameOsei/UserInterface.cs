@@ -1,5 +1,4 @@
 ﻿using Spectre.Console;
-using System.Globalization;
 using static CodingTracker.JonesKwameOsei.Enums;
 
 namespace CodingTracker.JonesKwameOsei;
@@ -50,6 +49,8 @@ internal class UserInterface
 
     private static void AddCodingSession()
     {
+        Console.Clear();
+
         CodingRecord codingRecord = new CodingRecord();
 
         var dateInputs = GetDateInputs();
@@ -86,6 +87,8 @@ internal class UserInterface
 
     private static void UpdateCodingSession()
     {
+        Console.Clear();
+
         var dataAccess = new DataAccess();
         var codingRecords = dataAccess.GetAllSessions();
         ViewCodingSessions(codingRecords);
@@ -113,22 +116,35 @@ internal class UserInterface
             return 0;
         }
 
-        while (!int.TryParse(input, out var value) || value < 0)
-        {
-            input = AnsiConsole.Ask<string>($"\n\nInvalid number: {prompt}").Trim();
-            if (input == "0")
-            {
-                MainMenu();
-                return 0;
-            }
-        }
+        var number = Validation.ValidateInt(input, prompt);
 
-        return int.Parse(input);
+        return number;
     }
 
     private static void DeleteCodingSession()
     {
+        Console.Clear();
 
+        var dataAccess = new DataAccess();
+        var codingRecords = dataAccess.GetAllSessions();
+        ViewCodingSessions(codingRecords);
+
+        var idInput = GetNumber("Enter the Id of the coding session you want to delete. Or enter [red]0[/] to return to main menu: ");
+        if (idInput == 0)
+        {
+            MainMenu();
+            return;
+        }
+
+        if (!AnsiConsole.Confirm("Are you sure you want to delete this record?"))
+            return;
+        var response = dataAccess.DeleteRecord(idInput);
+
+        var responseMessage = response < 1
+            ? "[red]No record with the id {idInput} exit. Press any key to return to Main Menu[/]"
+            : "[green]Record deleted successfully. Press any key to return to Main Menu[/]";
+        AnsiConsole.MarkupLine(responseMessage);
+        Console.ReadKey();
     }
 
     private static DateTime[] GetDateInputs()
@@ -137,31 +153,13 @@ internal class UserInterface
 
         if (startDateInput == "0") MainMenu();
 
-        DateTime startDate;
-        while (!DateTime.TryParseExact(startDateInput, "dd-MM-yy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out startDate))
-        {
-            startDateInput = AnsiConsole.Ask<string>("\n\nInvalid date format. Please input Start Date with the format: [yellow]dd-MM-yy HH:mm (24 hour clock)[/]. Please try again: \n\n");
-        }
+        var startDate = Validation.ValidateStartDate(startDateInput);
 
         var endDateInput = AnsiConsole.Ask<string>("Input End Date with the format: [yellow]dd-MM-yy HH:mm (24 hour clock)[/]. Or enter [red]0[/] to return to main menu: ");
 
         if (endDateInput == "0") MainMenu();
 
-        DateTime endDate;
-        while (!DateTime.TryParseExact(endDateInput, "dd-MM-yy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out endDate))
-        {
-            endDateInput = AnsiConsole.Ask<string>("\n\nInvalid date format or End Date is earlier than or equal to Start Date. Please input End Date with the format: [yellow]dd-MM-yy HH:mm (24 hour clock)[/]. Please try again: \n\n");
-        }
-
-        while (startDate > endDate)
-        {
-            endDateInput = AnsiConsole.Ask<string>("\n\nEnd date can't be before start start. Please try agian\n\n");
-
-            while (!DateTime.TryParseExact(endDateInput, "dd-MM-yy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out endDate))
-            {
-                endDateInput = AnsiConsole.Ask<string>("\n\nInvalid date format. Please input End Date with the format: [yellow]dd-MM-yy HH:mm (24 hour clock)[/]. Please try again: \n\n");
-            }
-        }
+        var endDate = Validation.ValidateEndDate(endDateInput, startDate);
 
         return [startDate, endDate];
     }
@@ -170,11 +168,7 @@ internal class UserInterface
     {
         var languageInput = AnsiConsole.Ask<string>("What programming language will you code? Or enter [red]0[/] to return to main menu: ");
         if (languageInput == "0") MainMenu();
-        while (string.IsNullOrWhiteSpace(languageInput))
-        {
-            languageInput = AnsiConsole.Ask<string>("\n\n[red]Language cannot be empty. Please enter a valid programming language. Please try again: \n\n[/]");
-        }
-        return languageInput;
+        return Validation.ValidateLanguage(languageInput);
     }
 
 }
