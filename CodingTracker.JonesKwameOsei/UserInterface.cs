@@ -1,4 +1,5 @@
 ﻿using Spectre.Console;
+using Spectre.Console.Rendering;
 using static CodingTracker.JonesKwameOsei.Enums;
 
 namespace CodingTracker.JonesKwameOsei;
@@ -11,11 +12,13 @@ internal class UserInterface
 
         while (isMenuRunning)
         {
+            Console.Clear();
             var userOption = AnsiConsole.Prompt(
                 new SelectionPrompt<MainMenuOptions>()
                     .Title("What would you like to do?")
                     .AddChoices(
                         MainMenuOptions.AddCodingSession,
+                        MainMenuOptions.StartLiveCodingSession,
                         MainMenuOptions.ViewCodingSessions,
                         MainMenuOptions.UpdateCodingSession,
                         MainMenuOptions.DeleteCodingSession,
@@ -27,6 +30,9 @@ internal class UserInterface
             {
                 case MainMenuOptions.AddCodingSession:
                     AddCodingSession();
+                    break;
+                case MainMenuOptions.StartLiveCodingSession:
+                    StartLiveCodingSession();
                     break;
                 case MainMenuOptions.ViewCodingSessions:
                     var dataAccess = new DataAccess();
@@ -45,6 +51,87 @@ internal class UserInterface
                     break;
             }
         }
+    }
+
+    private static void StartLiveCodingSession()
+    {
+        Console.Clear();
+        AnsiConsole.MarkupLine("[green]Starting live coding session...[/]");
+        var language = GetLanguageInput();
+        var session = new LiveSession(language);
+
+        AnsiConsole.MarkupLine("[yellow]Commands:[/] P = pause/resume | L = lap | S = stop & save | Q = cancel | H = help");
+        AnsiConsole.MarkupLine("[grey]Press any key at any time...[/]");
+
+        AnsiConsole.Live(new Panel("Starting...").Header("Live Coding Session")).Start(ctx =>
+        {
+            while (!session.IsFinished)
+            {
+                while (Console.KeyAvailable)
+                {
+                    var key = Console.ReadKey(intercept: true).Key;
+                    switch (key)
+                    {
+                        case ConsoleKey.P:
+                            if (session.IsPaused) session.Resume(); else session.Pause();
+                            break;
+                        case ConsoleKey.L:
+                            session.AddLap();
+                            break;
+                        case ConsoleKey.S:
+                            session.Stop(save: true);
+                            break;
+                        case ConsoleKey.Q:
+                            session.Stop(save: false);
+                            break;
+                        case ConsoleKey.H:
+                            AnsiConsole.MarkupLine("[yellow]P:[/] = pause/resume  [yellow]L[/]= lap  [yellow]S[/]= stop & save  [yellow]Q[/]= cancel  [yellow]H[/]= help");
+                            break;
+                    }
+                }
+
+                var panel = BuidSessionPanel(session);
+                ctx.UpdateTarget(panel);
+                Thread.Sleep(200);
+            }
+        });
+
+        if (!session.Saved)
+        {
+            AnsiConsole.MarkupLine("[red]Session discarded. Press any key to return to main menu.[/]");
+            Console.ReadKey(true);
+            return;
+        }
+
+        var record = new CodingRecord
+        {
+            Language = language,
+            DateStart = session.StartTime,
+            DateEnd = session.EndTime
+        };
+
+        new DataAccess().InsertRecord(record);
+
+        AnsiConsole.MarkupLine($"[green]Saved[/] Duration: {session.Elapsed:hh\\:mm\\:ss}. Press any key to return.");
+        Console.ReadKey(true);
+    }
+
+    private static IRenderable? BuidSessionPanel(LiveSession session)
+    {
+        var grid = new Grid();
+        grid.AddColumn();
+        grid.AddRow($"[bold]Language:[/] {session.Language}");
+        grid.AddRow($"[bold]Started:[/] {session.StartTime:yyyy-MM-dd HH:mm:ss}");
+        grid.AddRow($"[bold]Status:[/] {(session.IsPaused ? "[red]Paused[/]" : session.IsFinished ? "[green]Finished[/]" : "[green]Running[/]")}");
+        grid.AddRow($"[bold]Elapsed:[/] {session.Elapsed:hh\\:mm\\:ss}");
+        if (session.Laps.Count > 0)
+        {
+            var latest = session.Laps.Last();
+            grid.AddRow($"[bold]Laps:[/] {session.Laps.Count} (Latest: {latest:hh\\:mm\\:ss})");
+        }
+
+        return new Panel(grid).Header("Live Coding Session");
+
     }
 
     private static void AddCodingSession()
@@ -74,14 +161,24 @@ internal class UserInterface
 
         foreach (var codingRecord in codingRecords)
         {
+            // Prefer stored Duration if it looks valid; otherwise compute.
+            var duration = codingRecord.Duration != default
+                ? codingRecord.Duration
+                : codingRecord.DateEnd - codingRecord.DateStart;
+
+            var totalHours = (int)duration.TotalHours;
+            var minutesRemainder = duration.Minutes; // already remainder after hours
+            var formattedDuration = $"{totalHours} hours {minutesRemainder} minutes";
+
             table.AddRow(
                 codingRecord.Id.ToString(),
-                codingRecord.Language!,
-                codingRecord.DateStart.ToString(),
-                codingRecord.DateEnd.ToString(),
-                $"{codingRecord.Duration.TotalHours} hours {codingRecord.Duration.TotalMinutes % 60} minutes"
+                codingRecord.Language ?? string.Empty,
+                codingRecord.DateStart.ToString("dd/MM/yyyy HH:mm:ss"),
+                codingRecord.DateEnd.ToString("dd/MM/yyyy HH:mm:ss"),
+                formattedDuration
             );
         }
+
         AnsiConsole.Write(table);
     }
 
