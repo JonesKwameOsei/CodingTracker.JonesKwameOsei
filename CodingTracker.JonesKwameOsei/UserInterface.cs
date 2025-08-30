@@ -1,11 +1,23 @@
 ﻿using Spectre.Console;
 using Spectre.Console.Rendering;
+using System.Globalization;
 using static CodingTracker.JonesKwameOsei.Enums;
 
 namespace CodingTracker.JonesKwameOsei;
 
 internal class UserInterface
 {
+    /*
+    Pseudocode:
+    - Keep existing menu loop.
+    - Modify Quit case:
+        - Clear screen (optional) or just print farewell.
+        - Show goodbye message using AnsiConsole for consistency.
+        - Prompt user to press any key to exit so window does not close immediately.
+        - After key press set isMenuRunning = false to break loop and end program gracefully.
+    - No other behavioral changes.
+    */
+
     internal static void MainMenu()
     {
         var isMenuRunning = true;
@@ -19,7 +31,8 @@ internal class UserInterface
                     .AddChoices(
                         MainMenuOptions.AddCodingSession,
                         MainMenuOptions.StartLiveCodingSession,
-                        MainMenuOptions.ViewCodingSessions,
+                        MainMenuOptions.ViewAllCodingSessions,
+                        MainMenuOptions.FilterCodingSessions,
                         MainMenuOptions.UpdateCodingSession,
                         MainMenuOptions.DeleteCodingSession,
                         MainMenuOptions.Quit
@@ -34,10 +47,13 @@ internal class UserInterface
                 case MainMenuOptions.StartLiveCodingSession:
                     StartLiveCodingSession();
                     break;
-                case MainMenuOptions.ViewCodingSessions:
+                case MainMenuOptions.ViewAllCodingSessions:
                     var dataAccess = new DataAccess();
                     var codingRecords = dataAccess.GetAllSessions();
-                    ViewCodingSessions(codingRecords);
+                    ViewAllCodingSessions(codingRecords);
+                    break;
+                case MainMenuOptions.FilterCodingSessions:
+                    ViewCodingSessionsWithFilters();
                     break;
                 case MainMenuOptions.UpdateCodingSession:
                     UpdateCodingSession();
@@ -46,7 +62,9 @@ internal class UserInterface
                     DeleteCodingSession();
                     break;
                 case MainMenuOptions.Quit:
-                    Console.WriteLine("Goodbye");
+                    AnsiConsole.MarkupLine("[yellow]Goodbye![/]");
+                    AnsiConsole.MarkupLine("[grey]Press any key to close the application...[/]");
+                    Console.ReadKey(true);
                     isMenuRunning = false;
                     break;
             }
@@ -150,7 +168,7 @@ internal class UserInterface
 
     }
 
-    private static void ViewCodingSessions(IEnumerable<CodingRecord> codingRecords)
+    private static void ViewAllCodingSessions(IEnumerable<CodingRecord> codingRecords)
     {
         var table = new Table();
         table.AddColumn("Id");
@@ -161,13 +179,12 @@ internal class UserInterface
 
         foreach (var codingRecord in codingRecords)
         {
-            // Prefer stored Duration if it looks valid; otherwise compute.
             var duration = codingRecord.Duration != default
                 ? codingRecord.Duration
                 : codingRecord.DateEnd - codingRecord.DateStart;
 
             var totalHours = (int)duration.TotalHours;
-            var minutesRemainder = duration.Minutes; // already remainder after hours
+            var minutesRemainder = duration.Minutes;
             var formattedDuration = $"{totalHours} hours {minutesRemainder} minutes";
 
             table.AddRow(
@@ -180,6 +197,120 @@ internal class UserInterface
         }
 
         AnsiConsole.Write(table);
+        AnsiConsole.MarkupLine("\n[grey]Press any key to return to the menu...[/]");
+        Console.ReadKey(true);
+    }
+
+    private static void ViewCodingSessionsWithFilters()
+    {
+        Console.Clear();
+        var period = AnsiConsole.Prompt(
+            new SelectionPrompt<PeriodFilterOption>()
+                .Title("Select a period to filter by:")
+                .AddChoices(Enum.GetValues<PeriodFilterOption>())
+            );
+
+        DateTime? from = null;
+        DateTime? to = null;
+
+        var now = DateTime.Now;
+        var todayStart = now.Date;
+        var culture = CultureInfo.CurrentCulture;
+        DateTime StartOfWeek(DateTime dt) =>
+            dt.Date.AddDays(-(int)culture.DateTimeFormat.FirstDayOfWeek + (int)dt.DayOfWeek >= 7
+                ? -(int)dt.DayOfWeek
+                : -(int)dt.DayOfWeek + (int)culture.DateTimeFormat.FirstDayOfWeek);
+
+        switch (period)
+        {
+            case PeriodFilterOption.All:
+                break;
+            case PeriodFilterOption.Today:
+                from = todayStart;
+                to = todayStart.AddDays(1).AddTicks(-1);
+                break;
+            case PeriodFilterOption.Yesterday:
+                from = todayStart.AddDays(-1);
+                to = todayStart.AddTicks(-1);
+                break;
+            case PeriodFilterOption.Last7Days:
+                from = todayStart.AddDays(-6);
+                to = todayStart.AddDays(1).AddTicks(-1);
+                break;
+            case PeriodFilterOption.ThisWeek:
+                from = StartOfWeek(now);
+                to = from.Value.AddDays(7).AddTicks(-1);
+                break;
+            case PeriodFilterOption.LastWeek:
+                var thisWeekStart = StartOfWeek(now);
+                from = thisWeekStart.AddDays(-7);
+                to = thisWeekStart.AddTicks(-1);
+                break;
+            case PeriodFilterOption.ThisMonth:
+                from = new DateTime(now.Year, now.Month, 1);
+                to = from.Value.AddMonths(1).AddTicks(-1);
+                break;
+            case PeriodFilterOption.LastMonth:
+                var thisMonthStart = new DateTime(now.Year, now.Month, 1);
+                from = thisMonthStart.AddMonths(-1);
+                to = thisMonthStart.AddTicks(-1);
+                break;
+            case PeriodFilterOption.ThisYear:
+                from = new DateTime(now.Year, 1, 1);
+                to = from.Value.AddYears(1).AddTicks(-1);
+                break;
+            case PeriodFilterOption.LastYear:
+                from = new DateTime(now.Year - 1, 1, 1);
+                to = from.Value.AddYears(1).AddTicks(-1);
+                break;
+            case PeriodFilterOption.CustomRange:
+                var startStr = AnsiConsole.Ask<string>("Enter start date (yyyy-MM-dd):");
+                var endStr = AnsiConsole.Ask<string>("Enter end date inclusive (yyyy-MM-dd):");
+                if (!DateTime.TryParseExact(startStr, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var customStart) ||
+                    !DateTime.TryParseExact(endStr, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var customEnd))
+                {
+                    AnsiConsole.MarkupLine("[red]Invalid custom dates. Returning.[/]");
+                    Console.ReadKey();
+                    return;
+                }
+                if (customEnd < customStart)
+                {
+                    AnsiConsole.MarkupLine("[red]End before start. Returning.[/]");
+                    Console.ReadKey();
+                    return;
+                }
+                from = customStart.Date;
+                to = customEnd.Date.AddDays(1);
+                break;
+        }
+
+        var descending = AnsiConsole.Confirm("Order by most recent first?");
+
+        var all = new DataAccess().GetAllSessions();
+
+        var filtered = all.Where(r =>
+        {
+            if (from is not null && r.DateStart < from) return false;
+            if (to is not null && r.DateStart >= to) return false;
+            return true;
+        });
+
+        filtered = descending
+            ? filtered.OrderByDescending(r => r.DateStart)
+            : filtered.OrderBy(r => r.DateStart);
+
+        ViewAllCodingSessions(filtered);
+
+        var totalSessions = filtered.Count();
+        var totalTime = filtered.Aggregate(TimeSpan.Zero,
+            (acc, r) => acc + (r.Duration != default ? r.Duration : (r.DateEnd - r.DateStart)));
+
+        AnsiConsole.MarkupLine($"\n[bold]Summary:[/]");
+        AnsiConsole.MarkupLine($"Sessions: [yellow]{totalSessions}[/]");
+        AnsiConsole.MarkupLine($"Total Time: [green]{(int)totalTime.TotalHours}h {totalTime.Minutes}m[/]");
+
+        Console.WriteLine("\nPress any key to return...");
+        Console.ReadKey();
     }
 
     private static void UpdateCodingSession()
@@ -188,7 +319,7 @@ internal class UserInterface
 
         var dataAccess = new DataAccess();
         var codingRecords = dataAccess.GetAllSessions();
-        ViewCodingSessions(codingRecords);
+        ViewAllCodingSessions(codingRecords);
 
         var idInput = GetNumber("Enter the Id of the coding session you want to update. Or enter [red]0[/] to return to main menu: ");
         if (idInput == 0) MainMenu();
@@ -224,7 +355,7 @@ internal class UserInterface
 
         var dataAccess = new DataAccess();
         var codingRecords = dataAccess.GetAllSessions();
-        ViewCodingSessions(codingRecords);
+        ViewAllCodingSessions(codingRecords);
 
         var idInput = GetNumber("Enter the Id of the coding session you want to delete. Or enter [red]0[/] to return to main menu: ");
         if (idInput == 0)

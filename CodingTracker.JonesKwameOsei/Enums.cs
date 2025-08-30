@@ -13,7 +13,10 @@ internal class Enums
         StartLiveCodingSession,
 
         [Display(Name = "View Coding Sessions")]
-        ViewCodingSessions,
+        ViewAllCodingSessions,
+
+        [Display(Name = "Filter Coding Sessions")]
+        FilterCodingSessions,
 
         [Display(Name = "Update Coding Session")]
         UpdateCodingSession,
@@ -22,5 +25,20 @@ internal class Enums
         DeleteCodingSession,
 
         Quit
+    }
+
+    internal enum PeriodFilterOption
+    {
+        All,
+        Today,
+        Yesterday,
+        Last7Days,
+        ThisWeek,
+        LastWeek,
+        ThisMonth,
+        LastMonth,
+        ThisYear,
+        LastYear,
+        CustomRange
     }
 }
